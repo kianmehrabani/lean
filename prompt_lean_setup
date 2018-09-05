@@ -74,12 +74,23 @@ prompt_lean_git_dirty() {
     (($? == 0)) && echo ' +'
 
 prompt_lean_git_status() {
-    s=$(git_status)
-    if (($? == 2)); then
-      s="%F{1}$s%f"
-    elif (($? == 9)); then
-      s="%F{2}$s%f"
+    # prefix, dirty format, nsync format, clean format
+    s=$(git_status 'on ' '%%F{1}%s%%f' '%%F{3}%s%%f' '%%F{2}%s%%f')
+    # c="$?"
+    if [ -z "$s" ]; then
+      return
     fi
+    # if [ "$c" -eq 0 ]; then
+    #   c="2" # Green
+    # fi
+    # if (($? == 2)); then
+    #   c="1"
+    # elif (($? == 0)); then
+    #   c="2"
+    # fi
+    # if [ -n "$c" ]; then
+    #   s="%F{$c}"
+    # fi
     echo "$s"
 }
 

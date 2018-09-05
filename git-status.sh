@@ -1,82 +1,90 @@
 #!/bin/sh
 
-git_status() {
-  repo_info="$(git rev-parse --git-dir --is-inside-git-dir \
-    --is-bare-repository --is-inside-work-tree \
-    --short HEAD 2>/dev/null)"
-  rev_parse_exit="$?"
-  if [ -z "$repo_info" ]; then
-    return $rev_parse_exit
-  fi
-  short_sha="$(echo "$repo_info" | tail -n1)"
+GIT_STATUS_OTHER_RET="2"
 
-  # Main git command
-  out=$(git status -z --porcelain --ignore-submodules --branch -uno \
-    2>/dev/null | head -100)
-  # Head line of status --branch
-  h="$(echo "${out#\#\# }" | head -n1)"
-  # Porcelain branch status [ahead x, behind y]
-  # if [ "$s" = *\[*\] ]
-  # Extract info between brackets
-  s="$(echo "$h" | cut -d "[" -f2 | cut -d "]" -f1)"
-  if [ "$s" = "$h" ]; then
-    # Nothing matched
-    s=""
+git_status() {
+  # --git-dir --is-inside-git-dir --is-bare-repository
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return $?
   fi
-  # Strip parsed local repository status
-  branch_info="${h#$s}"
-  ## master...origin/master
-  case "$branch_info" in
-    "HEAD (no branch)") branch="$short_sha" ;;
-    *...*) branch="${branch_info%...*}" ;;
-    *) branch="$branch_info" ;;
-  esac
-  while [ -n "$s" ]; do
-    case $s in
-      # "") break 2 ;;
-      ,*) s="${s#,}" ;;
-      ahead\ *)
-        s="${s#ahead }"
-        ahead="${s%%,*}"
-        ;;
-      behind\ *)
-        s="${s#behind }"
-        behind=""
-        ;;
-      *)
-        echo >&2 "$s: invalid string"
-        exit 1
+  prefix="${1:-on }"      # format="${1:-on %s%s}"
+  # branch_format, flags_format?
+  dirty_format="${2:-%s}" # Dirty repository
+  other_format="${3:-%s}" # unstaged, unmerged...?
+  clean_format="${4:-%s}" # Clean repository
+  tmpdir=$(mktemp -d -t git.status)
+  tmpfile="$tmpdir/porcelain.fifo"
+  mkfifo "$tmpfile" # TODO mktmp to avoid collision?
+  git status --porcelain=v2 --ignore-submodules --branch \
+    >"$tmpfile" &
+  # --untracked-files[=<mode>] (no, normal, default: all)
+  # --ignore-submodules[=<when>] (none, untracked, dirty, default: all)
+  count=0
+  while read -r line; do
+    case "$line" in
+      # https://git-scm.com/docs/git-status#_branch_headers
+      "# branch.oid "*) oid="${line#\# branch.oid }" ;; # Current commit (or initial)
+      "# branch.head "*) head="${line#\# branch.head }" ;; # Current branch (or detached)
+      "# branch.upstream "*) upstream="${line#\# branch.upstream }" ;; # If upstream is set
+      "# branch.ab "*) ab="${line#\# branch.ab }" ;; # If upstream is set and the commit is present
+
+      # https://git-scm.com/docs/git-status#_changed_tracked_entries
+      # Ordinary changed entries have the following format:
+      # 1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
+      # Renamed or copied entries have the following format:
+      # 2 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <X><score> <path><sep><origPath>
+      # Unmerged entries have the following format:
+      # u <xy> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
+      # Untracked items have the following format:
+      # ? <path>
+      # Ignored items have the following format:
+      # ! <path>
+
+      1* | 2* | u* | \?* | !*) count=$((count + 1)) ;;
+      *) # echo >&2 "$line: invalid git status line"
+        return 1
         ;;
     esac
-  done
-  [ -n "$behind" ] && flags="$flags<"
-  [ -n "$ahead" ] && flags="$flags>"
-  # Number of reported files TODO -1
-  c="$(echo "$out" | wc -l)"
-  if [ "$c" -gt 0 ]; then
-    flags="$flags*"
-    # if [ "$branch" == "master" ]; then
-    #   branch_color="red"
-    # else
-    #   branch_color="orange"
-    # fi
-    ret=2 # Indicates uncommitted changes
+  done <"$tmpfile"
+  rm "$tmpfile" && rmdir "$tmpdir" # rm -R "$tmpdir"
+  # echo "oid: $oid"
+  # echo "head: $head"
+  # echo "upstream: $upstream"
+  # echo "ab: $ab"
+  branch="${head:-$(echo "$oid" | cut -c-7)}"
+  if [ "${GIT_STATUS_UPSTREAM:-0}" -eq 1 ] && [ -n "$upstream" ]; then
+    branch="$branch...$upstream"
   fi
-  # if [ -n "$behind" ] || [ -n "$ahead" ]; then
-  #   branch_color="yellow"
-  # fi
-  printf 'on %s%s' "$branch" "$flags"
-  # $cmd | while read -r line; do
-  #   case "${line:0:2}" in # $line | head -c2
-  #     \#\#) branch_info="${line#\#\# }" ;;
-  #     *) ((count++)) ;;
-  #     # ?M) ((changed++)) ;;
-  #     # ?A) ((added++)) ;;
-  #     # ?D) ((deleted++)) ;;
-  #     # U?) ((updated++)) ;;
-  #     # \?\?) ((untracked++)) ;;
-  #     # *) ((staged++)) ;;
-  #   esac
-  # done
+
+  # branch.ab +<ahead> -<behind>
+  ahead=0
+  behind=0
+  if [ -n "$ab" ]; then
+    ahead="${ab% -*}"
+    ahead="${ahead#+}"
+    behind="${ab#+* }"
+    behind="${behind#-}"
+  fi
+
+  flags=
+  [ "$behind" -gt 0 ] && flags="$flags>"
+  [ "$ahead" -gt 0 ] && flags="$flags<"
+  if [ "$count" -gt 0 ]; then
+    flags="$flags*"
+    # shellcheck disable=SC2059
+    branch="$(printf "$dirty_format" "$branch")"
+  elif [ "$ahead" -gt 0 ] || [ "$behind" -gt 0 ]; then
+    # shellcheck disable=SC2059
+    branch="$(printf "$other_format" "$branch")"
+  else
+    prefix="$clean_format$prefix"
+  fi
+
+  printf "%s%s%s" "$prefix" "$branch" "$flags"
+
+  ret=0
+  [ "$count" -gt 0 ] && ret="${GIT_STATUS_OTHER_RET}"
   return $ret
 }
+
+# git_status "$@"
