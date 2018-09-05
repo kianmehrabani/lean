@@ -1,3 +1,4 @@
+# vi: ft=zsh
 # lean prompt theme
 # by Miek Gieben: https://github.com/miekg/lean
 #
@@ -72,6 +73,7 @@ prompt_lean_git_dirty() {
     command test -n "$(git status --porcelain --ignore-submodules ${umode} 2>/dev/null | head -100)"
 
     (($? == 0)) && echo ' +'
+}
 
 prompt_lean_git_status() {
     # prefix, dirty format, nsync format, clean format
