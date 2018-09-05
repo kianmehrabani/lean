@@ -77,7 +77,7 @@ prompt_lean_git_dirty() {
 
 prompt_lean_git_status() {
     # prefix, dirty format, nsync format, clean format
-    git_status 'on ' '%%F{1}%s%%f' '%%F{3}%s%%f' '%%F{2}%s%%f'
+    git_status ' %%F{1}%s%%f' ' %%F{3}%s%%f' ' %%F{2}%s%%f'
 }
 
 # displays the exec time of the last command if set threshold was exceeded
