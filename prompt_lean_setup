@@ -66,11 +66,19 @@ prompt_lean_human_time() {
 prompt_lean_git_dirty() {
     # check if we're in a git repo
     command git rev-parse --is-inside-work-tree &>/dev/null || return
-    # check if it's dirty
-    local umode="-uno" #|| local umode="-unormal"
-    command test -n "$(git status --porcelain --ignore-submodules ${umode} 2>/dev/null | head -100)"
 
-    (($? == 0)) && echo ' +'
+    # # check if it's dirty
+    # local umode="-uno" #|| local umode="-unormal"
+    # command test -n "$(git status --porcelain --ignore-submodules ${umode} 2>/dev/null | head -100)"
+    # (($? == 0)) && echo ' +'
+
+    s=$(git_status)
+    if (($? == 2)); then
+      s="%F{1}$s%f"
+    elif (($? == 9)); then
+      s="%F{2}$s%f"
+    fi
+    echo "$s"
 }
 
 # displays the exec time of the last command if set threshold was exceeded
