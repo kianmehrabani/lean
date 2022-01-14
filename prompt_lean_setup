@@ -13,6 +13,7 @@ COLOR1=${PROMPT_LEAN_COLOR1-"242"}
 COLOR2=${PROMPT_LEAN_COLOR2-"110"}
 COLOR3=${PROMPT_LEAN_COLOR3-"150"}
 
+PROMPT_SYMBOL=${PROMPT_LEAN_SYMBOL-"%#"}
 PROMPT_LEAN_TMUX=${PROMPT_LEAN_TMUX-"t "}
 PROMPT_LEAN_PATH_PERCENT=${PROMPT_LEAN_PATH_PERCENT-60}
 PROMPT_LEAN_NOTITLE=${PROMPT_LEAN_NOTITLE-0}
@@ -32,6 +33,7 @@ to run the total running time is shown in the next prompt.
 
 Configuration:
 
+PROMPT_LEAN_SYMBOL: command line prefix, default equivalent to "%(!.#.%%)"
 PROMPT_LEAN_TMUX: used to indicate being in tmux, set to "t ", by default
 PROMPT_LEAN_LEFT: executed to allow custom information in the left side
 PROMPT_LEAN_RIGHT: executed to allow custom information in the right side
@@ -159,7 +161,7 @@ prompt_lean_precmd() {
     setopt promptsubst
     local vcs_info_str=''
     [[ $PROMPT_LEAN_VCS == 1 ]] && vcs_info_str='$vcs_info_msg_0_' # avoid https://github.com/njhartwell/pw3nage
-    PROMPT="$prompt_lean_jobs%F{"$COLOR3"}${prompt_lean_tmux}%f`$PROMPT_LEAN_LEFT`%f%(?.%F{"$COLOR2"}.%B%F{203})%#%f%k%b "
+    PROMPT="$prompt_lean_jobs%F{"$COLOR3"}${prompt_lean_tmux}%f`$PROMPT_LEAN_LEFT`%f%(?.%F{"$COLOR2"}.%B%F{203})$PROMPT_SYMBOL%f%k%b "
 
     local lean_pwd=''
     [[ $PROMPT_LEAN_PWD == 1 ]] && lean_pwd=`prompt_lean_pwd`
